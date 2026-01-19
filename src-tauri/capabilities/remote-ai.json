@@ -1,0 +1,24 @@
+{
+  "identifier": "remote-ai",
+  "description": "Allows access to AI service URLs",
+  "remote": {
+    "urls": [
+      "https://claude.ai/*",
+      "https://*.claude.ai/*",
+      "https://chat.openai.com/*",
+      "https://*.openai.com/*",
+      "https://gemini.google.com/*",
+      "https://*.google.com/*",
+      "https://accounts.google.com/*"
+    ]
+  },
+  "permissions": [
+    "core:webview:allow-webview-position",
+    "core:webview:allow-webview-size",
+    "core:webview:allow-set-webview-position",
+    "core:webview:allow-set-webview-size",
+    "core:window:allow-show",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position"
+  ]
+}
