@@ -6,6 +6,7 @@ use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
     webview::{NewWindowResponse, WebviewBuilder},
     LogicalPosition, LogicalSize, Manager, PhysicalSize, Position, Size, WebviewUrl, WindowEvent,
+    TitleBarStyle,
 };
 
 const AI_SERVICES: [(&str, &str); 3] = [
@@ -13,6 +14,8 @@ const AI_SERVICES: [(&str, &str); 3] = [
     ("chatgpt", "https://chat.openai.com/"),
     ("gemini", "https://gemini.google.com/app"),
 ];
+
+const TITLEBAR_VIEW_PATH: &str = "index.html?view=titlebar";
 
 // Safari user agent to bypass Google's WebView detection
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
@@ -137,6 +140,25 @@ pub fn run() {
                     }
                 });
             });
+
+            #[cfg(target_os = "macos")]
+            {
+                window.set_title_bar_style(TitleBarStyle::Overlay)?;
+                window.set_title("")?;
+            }
+
+            let titlebar_builder =
+                WebviewBuilder::new("titlebar", WebviewUrl::App(TITLEBAR_VIEW_PATH.into()))
+                    .user_agent(USER_AGENT);
+
+            let _titlebar = window.add_child(
+                titlebar_builder,
+                Position::Logical(LogicalPosition { x: 0.0, y: 0.0 }),
+                Size::Logical(LogicalSize {
+                    width: 1.0,
+                    height: 1.0,
+                }),
+            )?;
 
             // Add AI webviews as children of the main window
             for (label, url) in AI_SERVICES.iter() {

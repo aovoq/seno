@@ -44,14 +44,29 @@ pub async fn reload_all(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn new_chat_all(app: tauri::AppHandle) -> Result<(), String> {
-    for label in AI_SERVICES.iter() {
-        if let Some(webview) = app.get_webview(label) {
-            if let Some(url) = injector::get_new_chat_url(label) {
-                let script = format!("window.location.href = '{}';", url);
-                webview.eval(&script).map_err(|e| e.to_string())?;
-            }
-        }
+    let handles = AI_SERVICES
+        .iter()
+        .map(|label| {
+            let app = app.clone();
+            let label = label.to_string();
+            tauri::async_runtime::spawn(async move {
+                if let Some(webview) = app.get_webview(&label) {
+                    if let Some(url) = injector::get_new_chat_url(&label) {
+                        let script = format!("window.location.href = '{}';", url);
+                        webview.eval(&script).map_err(|e| e.to_string())?;
+                    }
+                }
+                Ok::<(), String>(())
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        handle
+            .await
+            .map_err(|e| e.to_string())??;
     }
+
     Ok(())
 }
 
