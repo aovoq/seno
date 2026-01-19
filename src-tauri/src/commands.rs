@@ -140,3 +140,28 @@ fn apply_zoom(app: &tauri::AppHandle, level: u32) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub async fn clear_cache_all(app: tauri::AppHandle) -> Result<(), String> {
+    let clear_script = r#"
+        (async () => {
+            try {
+                localStorage.clear();
+                sessionStorage.clear();
+                if ('caches' in window) {
+                    const names = await caches.keys();
+                    await Promise.all(names.map(name => caches.delete(name)));
+                }
+            } catch (e) {
+                console.error('Cache clear error:', e);
+            }
+        })();
+    "#;
+
+    for label in AI_SERVICES.iter() {
+        if let Some(webview) = app.get_webview(label) {
+            webview.eval(clear_script).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+

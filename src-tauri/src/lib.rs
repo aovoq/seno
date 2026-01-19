@@ -66,6 +66,7 @@ pub fn run() {
             commands::zoom_in,
             commands::zoom_out,
             commands::zoom_reset,
+            commands::clear_cache_all,
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -115,6 +116,10 @@ pub fn run() {
                 .item(&MenuItemBuilder::with_id("reload_all", "Reload All")
                     .accelerator("CmdOrCtrl+R")
                     .build(app)?)
+                .separator()
+                .item(&MenuItemBuilder::with_id("clear_cache", "Clear Cache")
+                    .accelerator("CmdOrCtrl+Shift+Delete")
+                    .build(app)?)
                 .build()?;
             let menu = MenuBuilder::new(app)
                 .items(&[&app_menu, &edit_menu, &view_menu, &chat_menu])
@@ -132,6 +137,7 @@ pub fn run() {
                         "zoom_reset" => commands::zoom_reset(app_handle).await.map(|_| ()),
                         "reload_all" => commands::reload_all(app_handle).await,
                         "new_chat_all" => commands::new_chat_all(app_handle).await,
+                        "clear_cache" => commands::clear_cache_all(app_handle).await,
                         _ => Ok(()),
                     };
 
