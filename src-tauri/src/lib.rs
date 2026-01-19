@@ -25,14 +25,82 @@ const USER_AGENT_DEFAULT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7
 const USER_AGENT_GEMINI: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
 
 // Gemini initialization script to bypass WebView detection
-const GEMINI_INIT_SCRIPT: &str = r#"
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+pub const GEMINI_INIT_SCRIPT: &str = r#"
+(function() {
+    if (window.__seno_patched) return;
+    window.__seno_patched = true;
+
+    // WebDriver detection bypass
+    Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+        configurable: true
+    });
+
+    // Chrome 91+ returns empty arrays for plugins and mimeTypes
     Object.defineProperty(navigator, 'plugins', {
-        get: () => [1, 2, 3, 4, 5]
+        get: () => [],
+        configurable: true
     });
+
+    Object.defineProperty(navigator, 'mimeTypes', {
+        get: () => [],
+        configurable: true
+    });
+
     Object.defineProperty(navigator, 'languages', {
-        get: () => ['ja-JP', 'ja', 'en-US', 'en']
+        get: () => ['ja-JP', 'ja', 'en-US', 'en'],
+        configurable: true
     });
+
+    // Remove automation flags
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+
+    // MutationObserver to reapply patches after SPA navigation
+    const observer = new MutationObserver(() => {
+        if (navigator.webdriver !== undefined) {
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined,
+                configurable: true
+            });
+        }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+})();
+"#;
+
+// Script for periodic re-injection (resets flag and reapplies patches)
+pub const GEMINI_REINJECT_SCRIPT: &str = r#"
+(function() {
+    window.__seno_patched = false;
+
+    Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+        configurable: true
+    });
+
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => [],
+        configurable: true
+    });
+
+    Object.defineProperty(navigator, 'mimeTypes', {
+        get: () => [],
+        configurable: true
+    });
+
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['ja-JP', 'ja', 'en-US', 'en'],
+        configurable: true
+    });
+
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+
+    window.__seno_patched = true;
+})();
 "#;
 
 fn get_user_agent(label: &str) -> &'static str {
@@ -136,6 +204,7 @@ pub fn run() {
             commands::zoom_out,
             commands::zoom_reset,
             commands::clear_cache_all,
+            commands::refresh_gemini_session,
         ])
         .setup(|app| {
             #[cfg(desktop)]

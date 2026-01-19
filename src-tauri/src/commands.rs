@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use tauri::Manager;
 
-use crate::{injector, layout};
+use crate::{injector, layout, GEMINI_REINJECT_SCRIPT};
 
 const AI_SERVICES: [&str; 3] = ["claude", "chatgpt", "gemini"];
 
@@ -211,6 +211,16 @@ pub async fn clear_cache_all(app: tauri::AppHandle) -> Result<(), String> {
         handle.await.map_err(|e| e.to_string())??;
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn refresh_gemini_session(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(webview) = app.get_webview("gemini") {
+        webview
+            .eval(GEMINI_REINJECT_SCRIPT)
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
