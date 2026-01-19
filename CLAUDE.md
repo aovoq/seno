@@ -10,7 +10,7 @@ Claude、ChatGPT、Geminiの3つのAIサービスを同時に表示し、統一�
 - **Frontend**: Vanilla TypeScript (フレームワークなし)
 - **Styling**: CSS Variables + システムダークモード対応
 - **Build**: Vite v6
-- **Package Manager**: npm
+- **Package Manager**: bun
 
 ## アーキテクチャ
 
@@ -54,15 +54,15 @@ seno/
 ├── index.html                  # エントリーHTML
 ├── vite.config.ts              # Vite設定
 ├── tsconfig.json               # TypeScript設定
-└── package.json                # npm依存関係
+└── package.json                # 依存関係定義
 ```
 
 ## 開発コマンド
 
 ```bash
-npm install          # 依存関係インストール
-npm run tauri dev    # 開発モード（ホットリロード有効）
-npm run tauri build  # リリースビルド（署名なし）
+bun install          # 依存関係インストール
+bun tauri dev        # 開発モード（ホットリロード有効）
+bun tauri build      # リリースビルド（署名なし）
 ```
 
 ## 署名付きリリースビルド
@@ -95,7 +95,7 @@ APPLE_PASSWORD=your-app-specific-password
 ### ビルドコマンド
 
 ```bash
-set -a && source .env && set +a && npm run tauri build
+set -a && source .env && set +a && bun tauri build
 ```
 
 成功すると以下が出力される：
