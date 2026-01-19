@@ -1,93 +1,98 @@
 import { invoke } from "@tauri-apps/api/core";
 
-const input = document.getElementById("unified-input") as HTMLTextAreaElement;
-const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;
-const inputBar = document.querySelector(".input-bar") as HTMLElement;
-const inputShell = document.querySelector(".input-shell") as HTMLElement;
+const view = new URLSearchParams(window.location.search).get("view") ?? "input";
 
-const MIN_TEXTAREA_HEIGHT = 40;
-const MAX_TEXTAREA_HEIGHT = 340;
+document.body.dataset.view = view;
 
-let lastInputBarHeight = 0;
+if (view === "titlebar") {
+  const titlebar = document.querySelector(".titlebar") as HTMLElement | null;
+  titlebar?.setAttribute("data-tauri-drag-region", "true");
+} else {
+  const input = document.getElementById("unified-input") as HTMLTextAreaElement;
+  const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;
+  const inputBar = document.querySelector(".input-bar") as HTMLElement;
+  const inputShell = document.querySelector(".input-shell") as HTMLElement;
 
-function getVerticalExtras(element: HTMLElement) {
-  const styles = getComputedStyle(element);
-  return (
-    parseFloat(styles.paddingTop) +
-    parseFloat(styles.paddingBottom) +
-    parseFloat(styles.borderTopWidth) +
-    parseFloat(styles.borderBottomWidth)
-  );
-}
+  const MIN_TEXTAREA_HEIGHT = 40;
+  const MAX_TEXTAREA_HEIGHT = 340;
 
-function updateInputBarHeight(textareaHeight: number) {
-  const shellExtras = getVerticalExtras(inputShell);
-  const barExtras = getVerticalExtras(inputBar);
-  const shellHeight = textareaHeight + shellExtras;
-  const buttonHeight = sendBtn.getBoundingClientRect().height;
-  const nextHeight = Math.ceil(Math.max(shellHeight, buttonHeight) + barExtras);
-  if (!Number.isFinite(nextHeight) || nextHeight <= 0) {
-    return;
+  let lastInputBarHeight = 0;
+
+  function getVerticalExtras(element: HTMLElement) {
+    const styles = getComputedStyle(element);
+    return (
+      parseFloat(styles.paddingTop) +
+      parseFloat(styles.paddingBottom) +
+      parseFloat(styles.borderTopWidth) +
+      parseFloat(styles.borderBottomWidth)
+    );
   }
-  if (nextHeight === lastInputBarHeight) {
-    return;
+
+  function updateInputBarHeight(textareaHeight: number) {
+    const shellExtras = getVerticalExtras(inputShell);
+    const barExtras = getVerticalExtras(inputBar);
+    const shellHeight = textareaHeight + shellExtras;
+    const buttonHeight = sendBtn.getBoundingClientRect().height;
+    const nextHeight = Math.ceil(Math.max(shellHeight, buttonHeight) + barExtras);
+    if (!Number.isFinite(nextHeight) || nextHeight <= 0) {
+      return;
+    }
+    if (nextHeight === lastInputBarHeight) {
+      return;
+    }
+    lastInputBarHeight = nextHeight;
+    console.debug("update_input_height", nextHeight);
+    invoke("update_input_height", { height: nextHeight }).catch((err) => {
+      console.error("Failed to update input height:", err);
+    });
   }
-  lastInputBarHeight = nextHeight;
-  console.debug("update_input_height", nextHeight);
-  invoke("update_input_height", { height: nextHeight }).catch((err) => {
-    console.error("Failed to update input height:", err);
+
+  async function sendToAll() {
+    const text = input.value.trim();
+    if (!text) return;
+
+    sendBtn.disabled = true;
+
+    try {
+      await invoke("send_to_all", { text });
+      input.value = "";
+      resizeTextarea();
+    } catch (err) {
+      console.error("Failed to send:", err);
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+
+  function resizeTextarea() {
+    input.style.height = "auto";
+    const rawHeight = input.scrollHeight;
+    const nextHeight = Math.min(
+      Math.max(rawHeight, MIN_TEXTAREA_HEIGHT),
+      MAX_TEXTAREA_HEIGHT,
+    );
+    input.style.height = nextHeight + "px";
+    input.style.overflowY = "hidden";
+    input.scrollTop = 0;
+
+    updateInputBarHeight(nextHeight);
+  }
+
+  sendBtn.addEventListener("click", sendToAll);
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.metaKey) {
+      e.preventDefault();
+      sendToAll();
+    }
   });
-}
 
+  input.addEventListener("input", resizeTextarea);
 
-async function sendToAll() {
-  const text = input.value.trim();
-  if (!text) return;
+  window.addEventListener("resize", () => {
+    updateInputBarHeight(input.getBoundingClientRect().height);
+  });
 
-  sendBtn.disabled = true;
-
-  try {
-    await invoke("send_to_all", { text });
-    input.value = "";
-    resizeTextarea();
-  } catch (err) {
-    console.error("Failed to send:", err);
-  } finally {
-    sendBtn.disabled = false;
-  }
-}
-
-function resizeTextarea() {
-  input.style.height = "auto";
-  const rawHeight = input.scrollHeight;
-  const nextHeight = Math.min(
-    Math.max(rawHeight, MIN_TEXTAREA_HEIGHT),
-    MAX_TEXTAREA_HEIGHT,
-  );
-  input.style.height = nextHeight + "px";
-  input.style.overflowY = "hidden";
-  input.scrollTop = 0;
-
-  updateInputBarHeight(nextHeight);
-}
-
-// Send button click
-sendBtn.addEventListener("click", sendToAll);
-
-// Cmd+Enter to send
-input.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && e.metaKey) {
-    e.preventDefault();
-    sendToAll();
-  }
-});
-
-// Auto-resize textarea
-input.addEventListener("input", resizeTextarea);
-
-window.addEventListener("resize", () => {
+  resizeTextarea();
   updateInputBarHeight(input.getBoundingClientRect().height);
-});
-
-resizeTextarea();
-updateInputBarHeight(input.getBoundingClientRect().height);
+}
