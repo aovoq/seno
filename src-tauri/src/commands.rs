@@ -11,12 +11,26 @@ static ZOOM_LEVEL: AtomicU32 = AtomicU32::new(100);
 
 #[tauri::command]
 pub async fn send_to_all(app: tauri::AppHandle, text: String) -> Result<(), String> {
-    for label in AI_SERVICES.iter() {
-        if let Some(webview) = app.get_webview(label) {
-            let script = injector::get_send_script(label, &text);
-            webview.eval(&script).map_err(|e| e.to_string())?;
-        }
+    let handles = AI_SERVICES
+        .iter()
+        .map(|label| {
+            let app = app.clone();
+            let label = label.to_string();
+            let text = text.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Some(webview) = app.get_webview(&label) {
+                    let script = injector::get_send_script(&label, &text);
+                    webview.eval(&script).map_err(|e| e.to_string())?;
+                }
+                Ok::<(), String>(())
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        handle.await.map_err(|e| e.to_string())??;
     }
+
     Ok(())
 }
 
@@ -32,13 +46,26 @@ pub async fn reload_webview(app: tauri::AppHandle, label: String) -> Result<(), 
 
 #[tauri::command]
 pub async fn reload_all(app: tauri::AppHandle) -> Result<(), String> {
-    for label in AI_SERVICES.iter() {
-        if let Some(webview) = app.get_webview(label) {
-            webview
-                .eval("window.location.reload()")
-                .map_err(|e| e.to_string())?;
-        }
+    let handles = AI_SERVICES
+        .iter()
+        .map(|label| {
+            let app = app.clone();
+            let label = label.to_string();
+            tauri::async_runtime::spawn(async move {
+                if let Some(webview) = app.get_webview(&label) {
+                    webview
+                        .eval("window.location.reload()")
+                        .map_err(|e| e.to_string())?;
+                }
+                Ok::<(), String>(())
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        handle.await.map_err(|e| e.to_string())??;
     }
+
     Ok(())
 }
 
@@ -108,7 +135,7 @@ pub async fn zoom_in(app: tauri::AppHandle) -> Result<f64, String> {
     let new_level = (current + 10).min(200);
     ZOOM_LEVEL.store(new_level, Ordering::SeqCst);
 
-    apply_zoom(&app, new_level)?;
+    apply_zoom(&app, new_level).await?;
     Ok(new_level as f64 / 100.0)
 }
 
@@ -119,24 +146,37 @@ pub async fn zoom_out(app: tauri::AppHandle) -> Result<f64, String> {
     let new_level = (current.saturating_sub(10)).max(50);
     ZOOM_LEVEL.store(new_level, Ordering::SeqCst);
 
-    apply_zoom(&app, new_level)?;
+    apply_zoom(&app, new_level).await?;
     Ok(new_level as f64 / 100.0)
 }
 
 #[tauri::command]
 pub async fn zoom_reset(app: tauri::AppHandle) -> Result<f64, String> {
     ZOOM_LEVEL.store(100, Ordering::SeqCst);
-    apply_zoom(&app, 100)?;
+    apply_zoom(&app, 100).await?;
     Ok(1.0)
 }
 
-fn apply_zoom(app: &tauri::AppHandle, level: u32) -> Result<(), String> {
+async fn apply_zoom(app: &tauri::AppHandle, level: u32) -> Result<(), String> {
     let zoom_factor = level as f64 / 100.0;
-    for label in AI_SERVICES.iter() {
-        if let Some(webview) = app.get_webview(label) {
-            webview.set_zoom(zoom_factor).map_err(|e| e.to_string())?;
-        }
+    let handles = AI_SERVICES
+        .iter()
+        .map(|label| {
+            let app = app.clone();
+            let label = label.to_string();
+            tauri::async_runtime::spawn(async move {
+                if let Some(webview) = app.get_webview(&label) {
+                    webview.set_zoom(zoom_factor).map_err(|e| e.to_string())?;
+                }
+                Ok::<(), String>(())
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        handle.await.map_err(|e| e.to_string())??;
     }
+
     Ok(())
 }
 
@@ -157,11 +197,24 @@ pub async fn clear_cache_all(app: tauri::AppHandle) -> Result<(), String> {
         })();
     "#;
 
-    for label in AI_SERVICES.iter() {
-        if let Some(webview) = app.get_webview(label) {
-            webview.eval(clear_script).map_err(|e| e.to_string())?;
-        }
+    let handles = AI_SERVICES
+        .iter()
+        .map(|label| {
+            let app = app.clone();
+            let label = label.to_string();
+            tauri::async_runtime::spawn(async move {
+                if let Some(webview) = app.get_webview(&label) {
+                    webview.eval(clear_script).map_err(|e| e.to_string())?;
+                }
+                Ok::<(), String>(())
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        handle.await.map_err(|e| e.to_string())??;
     }
+
     Ok(())
 }
 
