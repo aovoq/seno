@@ -2,6 +2,8 @@
 
 # Seno
 
+_**[seɪ-no]** — from Japanese「せーの！」meaning "ready, set, go!" — a phrase to start together in sync._
+
 **Chat with Claude, ChatGPT, and Gemini — all at once.**
 
 A native macOS app that displays three AI services side-by-side with a unified input field.
@@ -41,7 +43,7 @@ A native macOS app that displays three AI services side-by-side with a unified i
 
 ```bash
 # Clone
-git clone https://github.com/your-username/seno.git
+git clone https://github.com/aovoq/seno.git
 cd seno
 
 # Install dependencies
