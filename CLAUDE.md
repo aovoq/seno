@@ -34,12 +34,15 @@ Claude、ChatGPT、Geminiの3つのAIサービスを同時に表示し、統一�
 
 ```
 seno/
+├── .github/
+│   └── workflows/
+│       └── publish.yml         # リリース自動化ワークフロー
 ├── src/                        # フロントエンド（入力バーUI）
-│   ├── main.ts                 # 入力バーのロジック、キーボードショートカット (93行)
-│   └── styles/main.css         # スタイル定義 (139行)
+│   ├── main.ts                 # 入力バー・アップデートロジック (142行)
+│   └── styles/main.css         # スタイル定義 (239行)
 ├── src-tauri/                  # Rustバックエンド
 │   ├── src/
-│   │   ├── lib.rs              # アプリ初期化、webview構築、メニュー、リサイズ処理 (227行)
+│   │   ├── lib.rs              # アプリ初期化、webview構築、メニュー、リサイズ処理 (327行)
 │   │   ├── main.rs             # エントリーポイント (7行)
 │   │   ├── commands.rs         # Tauriコマンド (127行)
 │   │   ├── injector.rs         # 各AIサービス用JS注入スクリプト (157行)
@@ -49,7 +52,7 @@ seno/
 │   │   └── remote-ai.json      # AIサービスURL許可リスト
 │   ├── icons/                  # アプリアイコン
 │   ├── Cargo.toml              # Rust依存関係
-│   └── tauri.conf.json         # Tauri設定
+│   └── tauri.conf.json         # Tauri設定（バージョン管理）
 ├── .env.example                # 署名用環境変数テンプレート
 ├── index.html                  # エントリーHTML
 ├── vite.config.ts              # Vite設定
@@ -65,7 +68,97 @@ bun tauri dev        # 開発モード（ホットリロード有効）
 bun tauri build      # リリースビルド（署名なし）
 ```
 
-## 署名付きリリースビルド
+## GitHub Actionsによるリリース
+
+### 概要
+
+`src-tauri/tauri.conf.json`の`version`を更新してmainにpushすると、自動的に：
+1. バージョンタグが存在しなければリリースビルドを開始
+2. macOS（ARM/Intel）、Windows、Linuxの4並列でビルド
+3. macOSは署名・公証（Notarization）を実行
+4. GitHub Releasesにドラフトとして作成
+
+### リリース手順
+
+```bash
+# 1. tauri.conf.json の version を更新（例: 0.1.1 → 0.1.2）
+# 2. コミット & プッシュ
+git add .
+git commit -m "release: v0.1.2"
+git push origin main
+
+# 3. ビルド完了後、ドラフトリリースを公開
+gh release edit v0.1.2 --draft=false
+```
+
+### GitHub Secrets
+
+以下のSecretsがリポジトリに設定されている必要がある：
+
+| Secret名 | 説明 |
+|----------|------|
+| `APPLE_CERTIFICATE` | Developer ID証明書(.p12)をbase64エンコード |
+| `APPLE_CERTIFICATE_PASSWORD` | .p12のパスワード |
+| `APPLE_SIGNING_IDENTITY` | `Developer ID Application: Name (TEAM_ID)` |
+| `APPLE_ID` | Apple ID |
+| `APPLE_PASSWORD` | App用パスワード |
+| `APPLE_TEAM_ID` | チームID |
+| `KEYCHAIN_PASSWORD` | CI用キーチェーンパスワード（任意の文字列） |
+| `TAURI_SIGNING_PRIVATE_KEY` | 自動アップデート用署名秘密鍵 |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | 署名鍵のパスワード |
+
+### Secrets設定方法
+
+```bash
+# 証明書をbase64化して設定
+base64 -i certificate.p12 | gh secret set APPLE_CERTIFICATE
+
+# その他
+gh secret set APPLE_CERTIFICATE_PASSWORD --body "パスワード"
+gh secret set APPLE_SIGNING_IDENTITY --body "Developer ID Application: Name (TEAM_ID)"
+gh secret set APPLE_ID --body "your@email.com"
+gh secret set APPLE_PASSWORD --body "app-specific-password"
+gh secret set APPLE_TEAM_ID --body "TEAM_ID"
+gh secret set KEYCHAIN_PASSWORD --body "任意の文字列"
+
+# 自動アップデート署名鍵（初回のみ）
+bunx tauri signer generate -w ~/.tauri/seno.key
+gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/seno.key
+gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --body "パスワード"
+
+# 確認
+gh secret list
+```
+
+### 成果物
+
+| プラットフォーム | ファイル |
+|-----------------|---------|
+| macOS (Apple Silicon) | `Seno_x.x.x_aarch64.dmg` |
+| macOS (Intel) | `Seno_x.x.x_x64.dmg` |
+| Windows | `Seno_x.x.x_x64-setup.exe`, `.msi` |
+| Linux | `.deb`, `.rpm`, `.AppImage` |
+| 自動アップデート用 | `latest.json`, `.tar.gz`, `.sig` |
+
+### ワークフロー監視
+
+```bash
+# 実行一覧
+gh run list
+
+# 詳細確認
+gh run view <run_id>
+
+# 失敗ログ
+gh run view <run_id> --log-failed
+
+# リリース一覧
+gh release list
+```
+
+## ローカル署名付きビルド（オプション）
+
+GitHub Actionsを使わずにローカルでビルドする場合：
 
 ### 前提条件
 
@@ -100,7 +193,7 @@ set -a && source .env && set +a && bun tauri build
 
 成功すると以下が出力される：
 - `src-tauri/target/release/bundle/macos/Seno.app`（署名・公証済み）
-- `src-tauri/target/release/bundle/dmg/Seno_0.1.0_aarch64.dmg`（署名済み）
+- `src-tauri/target/release/bundle/dmg/Seno_x.x.x_aarch64.dmg`（署名済み）
 
 ### 署名の確認
 
@@ -251,6 +344,35 @@ struct LayoutMetrics {
 - 全webviewに同時適用
 - アプリ再起動でリセット（永続化なし）
 
+### 自動アップデート機能
+
+- **プラグイン**: `tauri-plugin-updater`, `tauri-plugin-process`
+- **エンドポイント**: GitHub Releases (`latest.json`)
+- **署名**: minisign形式（公開鍵は`tauri.conf.json`に埋め込み）
+
+**フロー**:
+1. アプリ起動後3秒で`check()`を実行
+2. `latest.json`から最新バージョン情報を取得
+3. 更新がある場合、タイトルバーに「Update available」ボタンを表示
+4. ユーザーがクリックすると`downloadAndInstall()`を実行
+5. プログレスバーでダウンロード進捗を表示
+6. 完了後`relaunch()`で自動再起動
+
+**設定ファイル**:
+```json
+// tauri.conf.json
+"plugins": {
+  "updater": {
+    "pubkey": "公開鍵（base64）",
+    "endpoints": ["https://github.com/.../latest.json"]
+  }
+}
+```
+
+**権限** (`capabilities/default.json`):
+- `updater:default`
+- `process:allow-restart`
+
 ### メニューシステム
 
 | メニュー | 項目 |
@@ -360,6 +482,12 @@ panic = "abort"     # パニック時に即座に終了（バイナリサイズ�
 ### 公証（Notarization）が失敗する
 → `APPLE_PASSWORD`がApp用パスワードか確認。通常のApple IDパスワードでは動作しない
 
+### 自動アップデートが動作しない
+→ `tauri.conf.json`の`pubkey`と`endpoints`を確認。GitHub Secretsに`TAURI_SIGNING_PRIVATE_KEY`が設定されているか確認
+
+### アップデート署名エラー
+→ 秘密鍵のパスワードが`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`と一致しているか確認
+
 ## 新機能追加時のチェックリスト
 
 - [ ] 新しいTauriコマンドは`commands.rs`に追加し、`lib.rs`の`invoke_handler`に登録
@@ -373,9 +501,9 @@ panic = "abort"     # パニック時に即座に終了（バイナリサイズ�
 | ファイル | 行数 | 役割 |
 |---------|------|------|
 | `main.rs` | 7 | エントリーポイント、lib.rsへ委譲 |
-| `lib.rs` | 227 | アプリ初期化、webview構築、メニュー |
+| `lib.rs` | 327 | アプリ初期化、webview構築、メニュー、プラグイン登録 |
 | `commands.rs` | 127 | Tauri IPCコマンド |
 | `injector.rs` | 157 | AIサービス用JS注入 |
 | `layout.rs` | 94 | レイアウト計算エンジン |
-| `main.ts` | 93 | 入力バーロジック |
-| `main.css` | 139 | スタイリング（ダーク/ライト） |
+| `main.ts` | 142 | 入力バー・アップデートチェックロジック |
+| `main.css` | 239 | スタイリング（ダーク/ライト、アップデートUI） |
