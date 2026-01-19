@@ -17,8 +17,18 @@ const AI_SERVICES: [(&str, &str); 3] = [
 
 const TITLEBAR_VIEW_PATH: &str = "index.html?view=titlebar";
 
-// Safari user agent to bypass Google's WebView detection
-const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+// Default user agent (Safari)
+const USER_AGENT_DEFAULT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+
+// Chrome user agent for Gemini (Google is more permissive with Chromium-based browsers)
+const USER_AGENT_GEMINI: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
+fn get_user_agent(label: &str) -> &'static str {
+    match label {
+        "gemini" => USER_AGENT_GEMINI,
+        _ => USER_AGENT_DEFAULT,
+    }
+}
 
 // Fixed UUIDs for session persistence (as byte arrays)
 const DATA_STORE_IDS: [(&str, [u8; 16]); 3] = [
@@ -155,7 +165,7 @@ pub fn run() {
 
             let titlebar_builder =
                 WebviewBuilder::new("titlebar", WebviewUrl::App(TITLEBAR_VIEW_PATH.into()))
-                    .user_agent(USER_AGENT);
+                    .user_agent(USER_AGENT_DEFAULT);
 
             let _titlebar = window.add_child(
                 titlebar_builder,
@@ -170,7 +180,7 @@ pub fn run() {
             for (label, url) in AI_SERVICES.iter() {
                 let mut builder =
                     WebviewBuilder::new(*label, WebviewUrl::External(url.parse().unwrap()))
-                        .user_agent(USER_AGENT)
+                        .user_agent(get_user_agent(label))
                         .on_new_window(move |_url, _features| {
                             // Allow the system to handle new window requests (OAuth popups)
                             NewWindowResponse::Allow
