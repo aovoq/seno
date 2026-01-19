@@ -22,7 +22,18 @@ const TITLEBAR_VIEW_PATH: &str = "index.html?view=titlebar";
 const USER_AGENT_DEFAULT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 
 // Chrome user agent for Gemini (Google is more permissive with Chromium-based browsers)
-const USER_AGENT_GEMINI: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+const USER_AGENT_GEMINI: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
+
+// Gemini initialization script to bypass WebView detection
+const GEMINI_INIT_SCRIPT: &str = r#"
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5]
+    });
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['ja-JP', 'ja', 'en-US', 'en']
+    });
+"#;
 
 fn get_user_agent(label: &str) -> &'static str {
     match label {
@@ -248,6 +259,11 @@ pub fn run() {
                                 Err(_) => NewWindowResponse::Allow,
                             }
                         });
+
+                // Add initialization script for Gemini to bypass WebView detection
+                if *label == "gemini" {
+                    builder = builder.initialization_script(GEMINI_INIT_SCRIPT);
+                }
 
                 // Set data store identifier for session persistence (macOS)
                 #[cfg(target_os = "macos")]
