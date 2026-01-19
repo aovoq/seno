@@ -8,6 +8,7 @@ use tauri::{
     LogicalPosition, LogicalSize, Manager, PhysicalSize, Position, Size, WebviewUrl, WindowEvent,
     TitleBarStyle,
 };
+use tauri_plugin_opener::OpenerExt;
 
 const AI_SERVICES: [(&str, &str); 3] = [
     ("claude", "https://claude.ai/new"),
@@ -63,10 +64,56 @@ fn get_data_store_id(label: &str) -> Option<[u8; 16]> {
         .map(|(_, id)| *id)
 }
 
+fn is_oauth_popup(url: &tauri::Url) -> bool {
+    let url_str = url.as_str().to_lowercase();
+    if url_str.is_empty() || url_str == "about:blank" || url_str == "about:srcdoc" {
+        return true;
+    }
+    if url_str.contains("oauth")
+        || url_str.contains("sso")
+        || url_str.contains("signin")
+        || url_str.contains("login")
+        || url_str.contains("authorize")
+    {
+        return true;
+    }
+
+    const AUTH_HOST_SUFFIXES: [&str; 15] = [
+        "accounts.google.com",
+        "login.microsoftonline.com",
+        "login.microsoft.com",
+        "login.live.com",
+        "appleid.apple.com",
+        "id.apple.com",
+        "auth0.com",
+        "okta.com",
+        "okta-emea.com",
+        "okta-apac.com",
+        "onelogin.com",
+        "pingidentity.com",
+        "pingone.com",
+        "duosecurity.com",
+        "duo.com",
+    ];
+
+    if let Some(host) = url.host_str() {
+        let host = host.to_lowercase();
+        if AUTH_HOST_SUFFIXES
+            .iter()
+            .any(|suffix| host == *suffix || host.ends_with(&format!(".{suffix}")))
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::send_to_all,
             commands::reload_webview,
@@ -157,6 +204,8 @@ pub fn run() {
                 });
             });
 
+            let app_handle = app.handle().clone();
+
             #[cfg(target_os = "macos")]
             {
                 window.set_title_bar_style(TitleBarStyle::Overlay)?;
@@ -178,12 +227,22 @@ pub fn run() {
 
             // Add AI webviews as children of the main window
             for (label, url) in AI_SERVICES.iter() {
+                let app_handle = app_handle.clone();
                 let mut builder =
                     WebviewBuilder::new(*label, WebviewUrl::External(url.parse().unwrap()))
                         .user_agent(get_user_agent(label))
-                        .on_new_window(move |_url, _features| {
-                            // Allow the system to handle new window requests (OAuth popups)
-                            NewWindowResponse::Allow
+                        .on_new_window(move |url, _features| {
+                            let url_str = url.to_string();
+                            if is_oauth_popup(&url) {
+                                // Allow OAuth popups inside the app to preserve session cookies.
+                                return NewWindowResponse::Allow;
+                            }
+
+                            // Open target=_blank links in the default browser.
+                            match app_handle.opener().open_url(url_str, None::<&str>) {
+                                Ok(_) => NewWindowResponse::Deny,
+                                Err(_) => NewWindowResponse::Allow,
+                            }
                         });
 
                 // Set data store identifier for session persistence (macOS)
