@@ -71,6 +71,7 @@ pub async fn reload_all(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn new_chat_all(app: tauri::AppHandle) -> Result<(), String> {
+    let script = injector::get_new_chat_script();
     let handles = AI_SERVICES
         .iter()
         .map(|label| {
@@ -78,10 +79,7 @@ pub async fn new_chat_all(app: tauri::AppHandle) -> Result<(), String> {
             let label = label.to_string();
             tauri::async_runtime::spawn(async move {
                 if let Some(webview) = app.get_webview(&label) {
-                    if let Some(url) = injector::get_new_chat_url(&label) {
-                        let script = format!("window.location.href = '{}';", url);
-                        webview.eval(&script).map_err(|e| e.to_string())?;
-                    }
+                    webview.eval(script).map_err(|e| e.to_string())?;
                 }
                 Ok::<(), String>(())
             })
@@ -89,9 +87,7 @@ pub async fn new_chat_all(app: tauri::AppHandle) -> Result<(), String> {
         .collect::<Vec<_>>();
 
     for handle in handles {
-        handle
-            .await
-            .map_err(|e| e.to_string())??;
+        handle.await.map_err(|e| e.to_string())??;
     }
 
     Ok(())

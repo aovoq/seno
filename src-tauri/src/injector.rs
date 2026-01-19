@@ -146,12 +146,21 @@ pub fn get_send_script(service: &str, text: &str) -> String {
     }
 }
 
-/// Returns the new chat URL for each AI service
-pub fn get_new_chat_url(service: &str) -> Option<&'static str> {
-    match service {
-        "claude" => Some("https://claude.ai/new"),
-        "chatgpt" => Some("https://chatgpt.com/"),
-        "gemini" => Some("https://gemini.google.com/app"),
-        _ => None,
-    }
+/// Returns script to trigger new chat via Cmd+Shift+O keyboard shortcut
+pub fn get_new_chat_script() -> &'static str {
+    r#"
+    (function() {
+        const event = new KeyboardEvent('keydown', {
+            key: 'o',
+            code: 'KeyO',
+            keyCode: 79,
+            which: 79,
+            metaKey: true,
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true
+        });
+        document.dispatchEvent(event);
+    })();
+    "#
 }
