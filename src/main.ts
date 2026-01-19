@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 
 const view = new URLSearchParams(window.location.search).get("view") ?? "input";
 
@@ -7,6 +9,48 @@ document.body.dataset.view = view;
 if (view === "titlebar") {
   const titlebar = document.querySelector(".titlebar") as HTMLElement | null;
   titlebar?.setAttribute("data-tauri-drag-region", "true");
+
+  const updateIndicator = document.getElementById("update-indicator");
+  const updateBtn = document.getElementById("update-btn");
+  const updateProgress = document.getElementById("update-progress");
+  const progressBar = document.getElementById("progress-bar");
+
+  async function checkForUpdates() {
+    try {
+      const update = await check();
+      if (update && updateIndicator && updateBtn) {
+        updateIndicator.style.display = "flex";
+        updateBtn.addEventListener("click", () => downloadAndInstall(update));
+      }
+    } catch (e) {
+      console.warn("Update check failed:", e);
+    }
+  }
+
+  async function downloadAndInstall(update: Update) {
+    if (!updateBtn || !updateProgress || !progressBar) return;
+    updateBtn.classList.add("downloading");
+    updateBtn.querySelector(".update-text")!.textContent = "Downloading...";
+    updateProgress.style.display = "block";
+
+    try {
+      let downloaded = 0;
+      let total = 0;
+      await update.downloadAndInstall((event) => {
+        if (event.event === "Started") total = event.data.contentLength ?? 0;
+        if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          if (total > 0) progressBar.style.width = `${(downloaded / total) * 100}%`;
+        }
+      });
+      await relaunch();
+    } catch (e) {
+      console.error("Update failed:", e);
+      updateBtn.querySelector(".update-text")!.textContent = "Update failed";
+    }
+  }
+
+  setTimeout(checkForUpdates, 3000);
 } else {
   const input = document.getElementById("unified-input") as HTMLTextAreaElement;
   const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;

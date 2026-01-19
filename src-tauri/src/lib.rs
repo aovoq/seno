@@ -114,6 +114,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             commands::send_to_all,
             commands::reload_webview,
@@ -126,6 +127,9 @@ pub fn run() {
             commands::clear_cache_all,
         ])
         .setup(|app| {
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+
             let app_handle = app.handle().clone();
             let main_window = app.get_webview_window("main").unwrap();
             let window = main_window.as_ref().window();
