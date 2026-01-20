@@ -150,6 +150,10 @@ pub fn get_send_script(service: &str, text: &str) -> String {
 pub fn get_new_chat_script() -> &'static str {
     r#"
     (function() {
+        // Temporarily disable focus to prevent stealing
+        const originalFocus = HTMLElement.prototype.focus;
+        HTMLElement.prototype.focus = function() {};
+
         const event = new KeyboardEvent('keydown', {
             key: 'o',
             code: 'KeyO',
@@ -161,6 +165,11 @@ pub fn get_new_chat_script() -> &'static str {
             cancelable: true
         });
         document.dispatchEvent(event);
+
+        // Re-enable focus after navigation settles
+        setTimeout(() => {
+            HTMLElement.prototype.focus = originalFocus;
+        }, 3000);
     })();
     "#
 }

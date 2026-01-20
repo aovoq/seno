@@ -18,6 +18,28 @@ const AI_SERVICES: [(&str, &str); 3] = [
 
 const TITLEBAR_VIEW_PATH: &str = "index.html?view=titlebar";
 
+// Prevent AI webviews from stealing focus during startup
+const FOCUS_GUARD_SCRIPT: &str = r#"
+(function() {
+    if (window.__seno_focus_guard) return;
+    window.__seno_focus_guard = true;
+
+    const originalFocus = HTMLElement.prototype.focus;
+    let focusEnabled = false;
+
+    HTMLElement.prototype.focus = function(...args) {
+        if (focusEnabled) {
+            return originalFocus.apply(this, args);
+        }
+    };
+
+    // Re-enable focus after user interaction or timeout
+    const enableFocus = () => { focusEnabled = true; };
+    document.addEventListener('pointerdown', enableFocus, { once: true });
+    setTimeout(enableFocus, 5000);
+})();
+"#;
+
 // Default user agent (Safari)
 const USER_AGENT_DEFAULT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 
@@ -205,6 +227,7 @@ pub fn run() {
             commands::zoom_reset,
             commands::clear_cache_all,
             commands::refresh_gemini_session,
+            commands::focus_input,
         ])
         .setup(|app| {
             #[cfg(desktop)]
@@ -330,6 +353,9 @@ pub fn run() {
                                 Err(_) => NewWindowResponse::Allow,
                             }
                         });
+
+                // Prevent focus stealing during startup
+                builder = builder.initialization_script(FOCUS_GUARD_SCRIPT);
 
                 // Add initialization script for Gemini to bypass WebView detection
                 if *label == "gemini" {

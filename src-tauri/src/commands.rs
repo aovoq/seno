@@ -90,6 +90,12 @@ pub async fn new_chat_all(app: tauri::AppHandle) -> Result<(), String> {
         handle.await.map_err(|e| e.to_string())??;
     }
 
+    // Delay to let SPA navigation complete before restoring focus
+    tauri::async_runtime::spawn(async move {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let _ = focus_input(app).await;
+    });
+
     Ok(())
 }
 
@@ -220,6 +226,14 @@ pub async fn refresh_gemini_session(app: tauri::AppHandle) -> Result<(), String>
         webview
             .eval(GEMINI_REINJECT_SCRIPT)
             .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn focus_input(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(webview) = app.get_webview("main") {
+        webview.set_focus().map_err(|e| e.to_string())?;
     }
     Ok(())
 }

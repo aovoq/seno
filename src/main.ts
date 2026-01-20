@@ -151,22 +151,11 @@ if (view === "titlebar") {
   updateInputBarHeight(input.getBoundingClientRect().height);
 
   // Focus management
-  input.focus();
+  async function focusInput() {
+    await invoke("focus_input");
+    input.focus();
+  }
 
-  // Re-focus input when window regains focus
-  window.addEventListener("focus", () => {
-    setTimeout(() => input.focus(), 50);
-  });
-
-  // Defensive re-focus when AI webview steals focus
-  input.addEventListener("blur", () => {
-    setTimeout(() => {
-      if (
-        document.activeElement === document.body ||
-        document.activeElement === null
-      ) {
-        input.focus();
-      }
-    }, 100);
-  });
+  focusInput();
+  window.addEventListener("focus", () => setTimeout(focusInput, 50));
 }
