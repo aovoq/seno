@@ -298,7 +298,8 @@ pub fn run() {
 
             let titlebar_builder =
                 WebviewBuilder::new("titlebar", WebviewUrl::App(TITLEBAR_VIEW_PATH.into()))
-                    .user_agent(USER_AGENT_DEFAULT);
+                    .user_agent(USER_AGENT_DEFAULT)
+                    .focused(false);
 
             let _titlebar = window.add_child(
                 titlebar_builder,
@@ -315,6 +316,7 @@ pub fn run() {
                 let mut builder =
                     WebviewBuilder::new(*label, WebviewUrl::External(url.parse().unwrap()))
                         .user_agent(get_user_agent(label))
+                        .focused(false)
                         .on_new_window(move |url, _features| {
                             let url_str = url.to_string();
                             if is_oauth_popup(&url) {

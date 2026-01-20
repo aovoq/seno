@@ -121,8 +121,13 @@ if (view === "titlebar") {
       MAX_TEXTAREA_HEIGHT,
     );
     input.style.height = nextHeight + "px";
-    input.style.overflowY = "hidden";
-    input.scrollTop = 0;
+
+    if (rawHeight > MAX_TEXTAREA_HEIGHT) {
+      input.style.overflowY = "auto";
+    } else {
+      input.style.overflowY = "hidden";
+      input.scrollTop = 0;
+    }
 
     updateInputBarHeight(nextHeight);
   }
@@ -144,4 +149,24 @@ if (view === "titlebar") {
 
   resizeTextarea();
   updateInputBarHeight(input.getBoundingClientRect().height);
+
+  // Focus management
+  input.focus();
+
+  // Re-focus input when window regains focus
+  window.addEventListener("focus", () => {
+    setTimeout(() => input.focus(), 50);
+  });
+
+  // Defensive re-focus when AI webview steals focus
+  input.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (
+        document.activeElement === document.body ||
+        document.activeElement === null
+      ) {
+        input.focus();
+      }
+    }, 100);
+  });
 }
