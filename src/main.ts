@@ -52,10 +52,10 @@ if (view === "titlebar") {
 
   setTimeout(checkForUpdates, 3000);
 
-  // Refresh Gemini session every 3 minutes to maintain WebView detection bypass
+  // Refresh Gemini session every 90 seconds to maintain WebView detection bypass
   setInterval(() => {
     invoke("refresh_gemini_session").catch(() => {});
-  }, 3 * 60 * 1000);
+  }, 90 * 1000);
 } else {
   const input = document.getElementById("unified-input") as HTMLTextAreaElement;
   const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;

@@ -79,6 +79,62 @@ pub const GEMINI_INIT_SCRIPT: &str = r#"
     delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
     delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
 
+    // window.chrome object (Chrome browser detection bypass)
+    if (!window.chrome) {
+        window.chrome = {
+            runtime: {
+                connect: function() { return {}; },
+                sendMessage: function() {},
+                onMessage: { addListener: function() {} },
+                id: undefined
+            },
+            app: {},
+            csi: function() { return {}; },
+            loadTimes: function() { return {}; }
+        };
+    }
+
+    // Visibility API bypass (prevent tab inactive detection)
+    Object.defineProperty(document, 'hidden', {
+        get: () => false,
+        configurable: true
+    });
+
+    Object.defineProperty(document, 'visibilityState', {
+        get: () => 'visible',
+        configurable: true
+    });
+
+    // Block visibilitychange events
+    document.addEventListener('visibilitychange', (e) => {
+        e.stopImmediatePropagation();
+    }, true);
+
+    // Mouse movement simulation (maintain active state)
+    if (!window.__seno_mouse_sim) {
+        window.__seno_mouse_sim = true;
+        setInterval(() => {
+            const event = new MouseEvent('mousemove', {
+                bubbles: true,
+                cancelable: true,
+                clientX: Math.random() * window.innerWidth,
+                clientY: Math.random() * window.innerHeight
+            });
+            document.dispatchEvent(event);
+        }, 30000);
+    }
+
+    // Permissions API bypass
+    if (navigator.permissions && navigator.permissions.query) {
+        const originalQuery = navigator.permissions.query.bind(navigator.permissions);
+        navigator.permissions.query = (parameters) => {
+            if (parameters.name === 'notifications') {
+                return Promise.resolve({ state: Notification.permission, onchange: null });
+            }
+            return originalQuery(parameters);
+        };
+    }
+
     // MutationObserver to reapply patches after SPA navigation
     const observer = new MutationObserver(() => {
         if (navigator.webdriver !== undefined) {
@@ -120,6 +176,44 @@ pub const GEMINI_REINJECT_SCRIPT: &str = r#"
     delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
     delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
     delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+
+    // Ensure window.chrome object exists
+    if (!window.chrome) {
+        window.chrome = {
+            runtime: {
+                connect: function() { return {}; },
+                sendMessage: function() {},
+                onMessage: { addListener: function() {} },
+                id: undefined
+            },
+            app: {},
+            csi: function() { return {}; },
+            loadTimes: function() { return {}; }
+        };
+    }
+
+    // Re-apply Visibility API bypass
+    Object.defineProperty(document, 'hidden', {
+        get: () => false,
+        configurable: true
+    });
+
+    Object.defineProperty(document, 'visibilityState', {
+        get: () => 'visible',
+        configurable: true
+    });
+
+    // Re-apply Permissions API bypass
+    if (navigator.permissions && navigator.permissions.query && !navigator.permissions.__seno_patched) {
+        navigator.permissions.__seno_patched = true;
+        const originalQuery = navigator.permissions.query.bind(navigator.permissions);
+        navigator.permissions.query = (parameters) => {
+            if (parameters.name === 'notifications') {
+                return Promise.resolve({ state: Notification.permission, onchange: null });
+            }
+            return originalQuery(parameters);
+        };
+    }
 
     window.__seno_patched = true;
 })();
