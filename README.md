@@ -6,7 +6,7 @@ _**[seɪ-no]** — from Japanese「せーの！」meaning "ready, set, go!" — 
 
 **Chat with Claude, ChatGPT, and Gemini — all at once.**
 
-A native macOS app that displays three AI services side-by-side with a unified input field.
+A native desktop app that displays three AI services side-by-side with a unified input field.
 
 <br>
 
@@ -14,10 +14,11 @@ A native macOS app that displays three AI services side-by-side with a unified i
 
 <br>
 
+[![Download](https://img.shields.io/github/v/release/aovoq/seno?label=Download&style=flat&color=6366f1)](https://github.com/aovoq/seno/releases/latest)
 [![macOS](https://img.shields.io/badge/macOS-000000?style=flat&logo=apple&logoColor=white)](https://www.apple.com/macos/)
+[![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows&logoColor=white)](https://www.microsoft.com/windows)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat&logo=linux&logoColor=black)](https://www.linux.org/)
 [![Tauri](https://img.shields.io/badge/Tauri_v2-24C8D8?style=flat&logo=tauri&logoColor=white)](https://tauri.app/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 
 </div>
 
@@ -26,34 +27,40 @@ A native macOS app that displays three AI services side-by-side with a unified i
 ## Features
 
 - **Unified Input** — Type once, send to all three AI services simultaneously
-- **Persistent Sessions** — Stay logged in across app restarts
-- **Native Performance** — Built with Tauri for minimal resource usage
+- **Completion Notifications** — Get notified when AI responses are ready (visual + sound)
+- **Persistent Sessions** — Stay logged in across app restarts (macOS)
+- **Auto Update** — Automatic update checking and installation
+- **Customizable Titlebar** — Show/hide and reorder titlebar elements via Settings
+- **Memory Monitoring** — Track memory usage in the titlebar
 - **Zoom Control** — Adjust AI panel size from 50% to 200%
 - **Dark Mode** — Automatic system theme detection
+- **Cross Platform** — Available for macOS, Windows, and Linux
 
 ## Installation
 
-### Requirements
+### Download
 
-- macOS 11.0+
-- [Bun](https://bun.sh/) (or npm/pnpm)
-- [Rust](https://rustup.rs/)
+Pre-built binaries are available on the [Releases page](https://github.com/aovoq/seno/releases/latest).
+
+| Platform | File |
+|----------|------|
+| macOS (Apple Silicon) | `Seno_x.x.x_aarch64.dmg` |
+| macOS (Intel) | `Seno_x.x.x_x64.dmg` |
+| Windows | `Seno_x.x.x_x64-setup.exe` |
+| Linux (Debian/Ubuntu) | `Seno_x.x.x_amd64.deb` |
+| Linux (Fedora/RHEL) | `Seno-x.x.x-1.x86_64.rpm` |
+| Linux (Other) | `Seno_x.x.x_amd64.AppImage` |
 
 ### Build from Source
 
+Requirements: [Bun](https://bun.sh/) (or npm/pnpm), [Rust](https://rustup.rs/)
+
 ```bash
-# Clone
 git clone https://github.com/aovoq/seno.git
 cd seno
-
-# Install dependencies
 bun install
-
-# Run in development mode
-bun tauri dev
-
-# Build for release
-bun tauri build
+bun tauri dev      # Development mode
+bun tauri build    # Release build
 ```
 
 ## Keyboard Shortcuts
@@ -63,6 +70,7 @@ bun tauri build
 | `⌘ Enter` | Send message to all |
 | `⌘ N` | New chat (all services) |
 | `⌘ R` | Reload all |
+| `⌘ ,` | Open Settings |
 | `⌘ +` | Zoom in |
 | `⌘ -` | Zoom out |
 | `⌘ 0` | Reset zoom |
@@ -90,6 +98,11 @@ Five WebViews in a single native window — each AI service maintains its own is
 | Frontend | Vanilla TypeScript |
 | Backend | Rust |
 | Build | Vite |
+
+## Notes
+
+- **Session persistence** works on macOS only (uses WebKit's `data_store_identifier`)
+- **Gemini stability**: Due to WKWebView limitations, occasional errors may occur. Use `⌘ R` to reload if needed
 
 ## License
 
