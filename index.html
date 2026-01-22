@@ -8,20 +8,40 @@
   </head>
   <body>
     <div id="app">
-      <div class="titlebar-view">
-        <div class="titlebar" data-tauri-drag-region>
-          <div class="titlebar-title" data-tauri-drag-region>Seno</div>
-          <div class="update-indicator" id="update-indicator" style="display: none;">
-            <button id="update-btn" class="update-btn">
-              <span class="update-text">Update available</span>
-            </button>
-            <div class="update-progress" id="update-progress" style="display: none;">
-              <div class="progress-bar" id="progress-bar"></div>
+        <div class="titlebar-view">
+          <div class="titlebar" data-tauri-drag-region>
+            <div class="titlebar-title" data-tauri-drag-region>Seno</div>
+            <div class="titlebar-right" data-tauri-drag-region>
+              <div class="update-indicator" id="update-indicator" style="display: none;">
+                <button id="update-btn" class="update-btn">
+                  <span class="update-text">Update available</span>
+                </button>
+                <div class="update-progress" id="update-progress" style="display: none;">
+                  <div class="progress-bar" id="progress-bar"></div>
+                </div>
+              </div>
+              <div class="service-status" id="service-status">
+                <div class="service-status-item" data-provider="claude" data-state="unknown">
+                  <span class="service-status-label">Claude</span>
+                  <span class="service-status-dot"></span>
+                  <span class="service-status-text" id="status-claude">Unknown</span>
+                </div>
+                <div class="service-status-item" data-provider="chatgpt" data-state="unknown">
+                  <span class="service-status-label">GPT</span>
+                  <span class="service-status-dot"></span>
+                  <span class="service-status-text" id="status-chatgpt">Unknown</span>
+                </div>
+                <div class="service-status-item" data-provider="gemini" data-state="unknown">
+                  <span class="service-status-label">Gemini</span>
+                  <span class="service-status-dot"></span>
+                  <span class="service-status-text" id="status-gemini">Unknown</span>
+                </div>
+              </div>
+              <div class="provider-toast" id="provider-toast" style="display: none;"></div>
             </div>
+            <div class="titlebar-spacer" data-tauri-drag-region></div>
           </div>
-          <div class="titlebar-spacer" data-tauri-drag-region></div>
         </div>
-      </div>
       <div class="input-bar">
         <div class="input-shell">
           <textarea

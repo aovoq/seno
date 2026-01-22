@@ -5,10 +5,11 @@ mod layout;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
     webview::{NewWindowResponse, WebviewBuilder},
-    LogicalPosition, LogicalSize, Manager, PhysicalSize, Position, Size, WebviewUrl, WindowEvent,
-    TitleBarStyle,
+    Emitter, LogicalPosition, LogicalSize, Manager, PhysicalSize, Position, Size, WebviewUrl,
+    WindowEvent, TitleBarStyle,
 };
 use tauri_plugin_opener::OpenerExt;
+use serde::Serialize;
 
 const AI_SERVICES: [(&str, &str); 3] = [
     ("claude", "https://claude.ai/new"),
@@ -219,6 +220,173 @@ pub const GEMINI_REINJECT_SCRIPT: &str = r#"
 })();
 "#;
 
+fn get_status_monitor_script(label: &str) -> String {
+    format!(
+        r#"
+(function() {{
+    if (window.__seno_status_monitor) return;
+    window.__seno_status_monitor = true;
+
+    const provider = "{label}";
+    let baseTitle = document.title;
+
+    const normalizeToastText = (value) => {{
+        return value.replace(/\s+/g, ' ').replace(/\]/g, ')').trim();
+    }};
+
+    const stripSuffix = (title) => {{
+        const marker = " [seno:";
+        const index = title.lastIndexOf(marker);
+        if (index === -1) return title;
+        return title.slice(0, index);
+    }};
+
+    const setStatusTitle = (status) => {{
+        const current = document.title || "";
+        const currentBase = stripSuffix(current);
+        if (currentBase && currentBase !== baseTitle) {{
+            baseTitle = currentBase;
+        }}
+        const next = `${{baseTitle}} [seno:${{status}}]`;
+        if (document.title !== next) {{
+            document.title = next;
+        }}
+    }};
+
+    let lastToast = null;
+    const setToastTitle = (message) => {{
+        const normalized = normalizeToastText(message);
+        if (!normalized) return;
+        if (normalized === lastToast) return;
+        lastToast = normalized;
+        const current = document.title || "";
+        const currentBase = stripSuffix(current);
+        if (currentBase && currentBase !== baseTitle) {{
+            baseTitle = currentBase;
+        }}
+        const shortMessage = normalized.length > 120 ? normalized.slice(0, 117) + '...' : normalized;
+        const next = `${{baseTitle}} [seno:toast:${{shortMessage}}]`;
+        if (document.title !== next) {{
+            document.title = next;
+        }}
+    }};
+
+    const isVisible = (selector) => {{
+        const el = document.querySelector(selector);
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    }};
+
+    const isStreaming = () => {{
+        switch (provider) {{
+            case "claude":
+                return isVisible('button[aria-label*="Stop"]')
+                    || isVisible('button[aria-label*="停止"]')
+                    || isVisible('button[aria-label*="Cancel"]');
+            case "chatgpt":
+                return isVisible('button[data-testid="stop-button"]')
+                    || isVisible('button[aria-label*="Stop"]')
+                    || isVisible('button[aria-label*="停止"]');
+            case "gemini":
+                return isVisible('button[aria-label*="Stop"]')
+                    || isVisible('button[aria-label*="停止"]')
+                    || isVisible('button[mattooltip*="Stop"]')
+                    || isVisible('button[mattooltip*="停止"]');
+            default:
+                return false;
+        }}
+    }};
+
+    let lastStatus = null;
+    const check = () => {{
+        const status = isStreaming() ? "streaming" : "idle";
+        if (status !== lastStatus) {{
+            lastStatus = status;
+            setStatusTitle(status);
+        }}
+    }};
+
+    const toastSelectors = [
+        '[role="alert"]',
+        '[aria-live="polite"]',
+        '[aria-live="assertive"]',
+        'snackbar-container',
+        '.mat-snack-bar-container'
+    ];
+
+    const extractToast = (node) => {{
+        if (!(node instanceof HTMLElement)) return null;
+        if (!toastSelectors.some((selector) => node.matches(selector))) return null;
+        return node.textContent || "";
+    }};
+
+    const toastObserver = new MutationObserver((mutations) => {{
+        for (const mutation of mutations) {{
+            for (const node of mutation.addedNodes) {{
+                const message = extractToast(node);
+                if (message) {{
+                    setToastTitle(message);
+                    return;
+                }}
+                if (node instanceof HTMLElement) {{
+                    const nested = node.querySelector(toastSelectors.join(','));
+                    if (nested) {{
+                        const text = nested.textContent || "";
+                        if (text) {{
+                            setToastTitle(text);
+                            return;
+                        }}
+                    }}
+                }}
+            }}
+        }}
+    }});
+
+    toastObserver.observe(document.documentElement, {{ childList: true, subtree: true }});
+
+    setInterval(check, 1000);
+    document.addEventListener("visibilitychange", check, true);
+    window.addEventListener("load", check);
+    check();
+}})();
+"#,
+        label = label
+    )
+}
+
+#[derive(Clone, Serialize)]
+struct ProviderStatusPayload {
+    provider: String,
+    status: String,
+}
+
+#[derive(Clone, Serialize)]
+struct ProviderToastPayload {
+    provider: String,
+    message: String,
+}
+
+fn parse_status_from_title(title: &str) -> Option<&str> {
+    parse_title_segment(title, " [seno:")
+}
+
+fn parse_toast_from_title(title: &str) -> Option<String> {
+    parse_title_segment(title, " [seno:toast:").map(str::to_string)
+}
+
+fn parse_title_segment<'a>(title: &'a str, marker: &str) -> Option<&'a str> {
+    let start = title.rfind(marker)?;
+    let value_start = start + marker.len();
+    let end = title[value_start..].find(']')? + value_start;
+    let value = title[value_start..end].trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
 fn get_user_agent(label: &str) -> &'static str {
     match label {
         "gemini" => USER_AGENT_GEMINI,
@@ -310,6 +478,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             commands::send_to_all,
             commands::reload_webview,
@@ -430,6 +599,7 @@ pub fn run() {
             // Add AI webviews as children of the main window
             for (label, url) in AI_SERVICES.iter() {
                 let app_handle = app_handle.clone();
+                let opener_handle = app_handle.clone();
                 let mut builder =
                     WebviewBuilder::new(*label, WebviewUrl::External(url.parse().unwrap()))
                         .user_agent(get_user_agent(label))
@@ -442,7 +612,7 @@ pub fn run() {
                             }
 
                             // Open target=_blank links in the default browser.
-                            match app_handle.opener().open_url(url_str, None::<&str>) {
+                            match opener_handle.opener().open_url(url_str, None::<&str>) {
                                 Ok(_) => NewWindowResponse::Deny,
                                 Err(_) => NewWindowResponse::Allow,
                             }
@@ -450,6 +620,29 @@ pub fn run() {
 
                 // Prevent focus stealing during startup
                 builder = builder.initialization_script(FOCUS_GUARD_SCRIPT);
+
+                // Status monitoring script for streaming detection
+                builder = builder.initialization_script(get_status_monitor_script(label));
+
+                let status_app_handle = app_handle.clone();
+                let status_label = label.to_string();
+                builder = builder.on_document_title_changed(move |_webview, title| {
+                    if let Some(message) = parse_toast_from_title(&title) {
+                        let payload = ProviderToastPayload {
+                            provider: status_label.clone(),
+                            message,
+                        };
+                        let _ = status_app_handle.emit_to("titlebar", "provider-toast", payload);
+                        return;
+                    }
+                    if let Some(status) = parse_status_from_title(&title) {
+                        let payload = ProviderStatusPayload {
+                            provider: status_label.clone(),
+                            status: status.to_string(),
+                        };
+                        let _ = status_app_handle.emit_to("titlebar", "provider-status", payload);
+                    }
+                });
 
                 // Add initialization script for Gemini to bypass WebView detection
                 if *label == "gemini" {

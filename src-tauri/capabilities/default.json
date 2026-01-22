@@ -3,6 +3,7 @@
   "description": "Default capabilities for the main window",
   "local": true,
   "windows": ["main"],
+  "webviews": ["main", "titlebar"],
   "permissions": [
     "core:default",
     "shell:allow-open",
@@ -15,6 +16,7 @@
     "core:webview:allow-set-webview-position",
     "core:webview:allow-set-webview-size",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "notification:default"
   ]
 }

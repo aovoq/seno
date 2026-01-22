@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import { check, type Update } from "@tauri-apps/plugin-updater";
+import { listen } from "@tauri-apps/api/event";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 
 const view = new URLSearchParams(window.location.search).get("view") ?? "input";
 
@@ -14,8 +20,59 @@ if (view === "titlebar") {
   const updateBtn = document.getElementById("update-btn");
   const updateProgress = document.getElementById("update-progress");
   const progressBar = document.getElementById("progress-bar");
+  const toastIndicator = document.getElementById("provider-toast");
 
-  async function checkForUpdates() {
+  const statusItems = {
+    claude: document.querySelector('[data-provider="claude"]') as HTMLElement | null,
+    chatgpt: document.querySelector('[data-provider="chatgpt"]') as HTMLElement | null,
+    gemini: document.querySelector('[data-provider="gemini"]') as HTMLElement | null,
+  };
+
+  const statusTexts = {
+    claude: document.getElementById("status-claude"),
+    chatgpt: document.getElementById("status-chatgpt"),
+    gemini: document.getElementById("status-gemini"),
+  };
+
+  // Track streaming status for all providers
+  const providerStates: Record<string, string> = {
+    claude: "unknown",
+    chatgpt: "unknown",
+    gemini: "unknown",
+  };
+
+  // Track if any provider was streaming (to detect completion)
+  let wasAnyStreaming = false;
+
+  function checkAllIdleAndNotify(): void {
+    const allIdle = Object.values(providerStates).every(
+      (state) => state === "idle"
+    );
+
+    if (allIdle && wasAnyStreaming) {
+      wasAnyStreaming = false;
+      sendCompletionNotification();
+    }
+  }
+
+  async function sendCompletionNotification(): Promise<void> {
+    try {
+      let hasPermission = await isPermissionGranted();
+      if (!hasPermission) {
+        hasPermission = (await requestPermission()) === "granted";
+      }
+      if (!hasPermission) return;
+
+      sendNotification({
+        title: "Seno",
+        body: "All AI responses completed",
+      });
+    } catch (e) {
+      console.warn("Notification failed:", e);
+    }
+  }
+
+  async function checkForUpdates(): Promise<void> {
     try {
       const update = await check();
       if (update && updateIndicator && updateBtn) {
@@ -27,7 +84,7 @@ if (view === "titlebar") {
     }
   }
 
-  async function downloadAndInstall(update: Update) {
+  async function downloadAndInstall(update: Update): Promise<void> {
     if (!updateBtn || !updateProgress || !progressBar) return;
     updateBtn.classList.add("downloading");
     updateBtn.querySelector(".update-text")!.textContent = "Downloading...";
@@ -50,12 +107,64 @@ if (view === "titlebar") {
     }
   }
 
+  function setStatus(provider: keyof typeof statusItems, state: string): void {
+    const item = statusItems[provider];
+    const text = statusTexts[provider];
+    if (!item || !text) return;
+
+    const prevState = providerStates[provider];
+    providerStates[provider] = state;
+    item.dataset.state = state;
+
+    switch (state) {
+      case "streaming":
+        wasAnyStreaming = true;
+        text.textContent = "Streaming";
+        break;
+      case "idle":
+        text.textContent = "Idle";
+        if (prevState === "streaming") {
+          checkAllIdleAndNotify();
+        }
+        break;
+      default:
+        text.textContent = "Unknown";
+    }
+  }
+
   setTimeout(checkForUpdates, 3000);
 
   // Refresh Gemini session every 90 seconds to maintain WebView detection bypass
   setInterval(() => {
     invoke("refresh_gemini_session").catch(() => {});
   }, 90 * 1000);
+
+  function handleProviderStatus(event: { payload: { provider: string; status: string } }): void {
+    const provider = event.payload.provider as keyof typeof statusItems;
+    if (!provider || !(provider in statusItems)) return;
+    setStatus(provider, event.payload.status);
+  }
+
+  listen<{ provider: string; status: string }>("provider-status", handleProviderStatus).catch((err) => {
+    console.warn("Failed to listen provider status:", err);
+  });
+
+  let toastTimer: number | null = null;
+
+  function handleProviderToast(event: { payload: { provider: string; message: string } }): void {
+    if (!toastIndicator) return;
+    const provider = event.payload.provider.toUpperCase();
+    toastIndicator.textContent = `${provider}: ${event.payload.message}`;
+    toastIndicator.style.display = "flex";
+    if (toastTimer) window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => {
+      toastIndicator.style.display = "none";
+    }, 10000);
+  }
+
+  listen<{ provider: string; message: string }>("provider-toast", handleProviderToast).catch((err) => {
+    console.warn("Failed to listen provider toast:", err);
+  });
 } else {
   const input = document.getElementById("unified-input") as HTMLTextAreaElement;
   const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;
@@ -67,7 +176,7 @@ if (view === "titlebar") {
 
   let lastInputBarHeight = 0;
 
-  function getVerticalExtras(element: HTMLElement) {
+  function getVerticalExtras(element: HTMLElement): number {
     const styles = getComputedStyle(element);
     return (
       parseFloat(styles.paddingTop) +
@@ -77,7 +186,7 @@ if (view === "titlebar") {
     );
   }
 
-  function updateInputBarHeight(textareaHeight: number) {
+  function updateInputBarHeight(textareaHeight: number): void {
     const shellExtras = getVerticalExtras(inputShell);
     const barExtras = getVerticalExtras(inputBar);
     const shellHeight = textareaHeight + shellExtras;
@@ -96,7 +205,7 @@ if (view === "titlebar") {
     });
   }
 
-  async function sendToAll() {
+  async function sendToAll(): Promise<void> {
     const text = input.value.trim();
     if (!text) return;
 
@@ -113,7 +222,7 @@ if (view === "titlebar") {
     }
   }
 
-  function resizeTextarea() {
+  function resizeTextarea(): void {
     input.style.height = "auto";
     const rawHeight = input.scrollHeight;
     const nextHeight = Math.min(
@@ -151,7 +260,7 @@ if (view === "titlebar") {
   updateInputBarHeight(input.getBoundingClientRect().height);
 
   // Focus management
-  async function focusInput() {
+  async function focusInput(): Promise<void> {
     await invoke("focus_input");
     input.focus();
   }
