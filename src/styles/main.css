@@ -294,6 +294,13 @@ body[data-view="titlebar"] .input-bar {
   white-space: nowrap;
 }
 
+.gemini-reinject {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
 .update-btn {
   padding: 4px 10px;
   font-size: 11px;

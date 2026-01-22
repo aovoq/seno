@@ -22,6 +22,7 @@ if (view === "titlebar") {
   const progressBar = document.getElementById("progress-bar");
   const toastIndicator = document.getElementById("provider-toast");
   const memoryIndicator = document.getElementById("memory-indicator");
+  const reinjectIndicator = document.getElementById("gemini-reinject");
 
   const statusItems = {
     claude: document.querySelector('[data-provider="claude"]') as HTMLElement | null,
@@ -156,10 +157,29 @@ if (view === "titlebar") {
   refreshMemoryUsage();
   setInterval(refreshMemoryUsage, 5000);
 
+  function formatSeconds(ms: number): string {
+    const seconds = Math.max(0, Math.ceil(ms / 1000));
+    return `${seconds}s`;
+  }
+
   // Refresh Gemini session every 90 seconds to maintain WebView detection bypass
-  setInterval(() => {
+  const reinjectInterval = 90 * 1000;
+  let reinjectAt = Date.now() + reinjectInterval;
+
+  function updateReinjectCountdown(): void {
+    if (!reinjectIndicator) return;
+    reinjectIndicator.textContent = `Gemini reinject: ${formatSeconds(reinjectAt - Date.now())}`;
+  }
+
+  function handleReinjectInterval(): void {
     invoke("refresh_gemini_session").catch(() => {});
-  }, 90 * 1000);
+    reinjectAt = Date.now() + reinjectInterval;
+    updateReinjectCountdown();
+  }
+
+  updateReinjectCountdown();
+  setInterval(updateReinjectCountdown, 1000);
+  setInterval(handleReinjectInterval, reinjectInterval);
 
   function handleProviderStatus(event: { payload: { provider: string; status: string } }): void {
     const provider = event.payload.provider as keyof typeof statusItems;
