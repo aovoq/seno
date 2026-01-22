@@ -2,8 +2,8 @@
   "identifier": "default",
   "description": "Default capabilities for the main window",
   "local": true,
-  "windows": ["main"],
-  "webviews": ["main", "titlebar"],
+  "windows": ["main", "settings"],
+  "webviews": ["main", "titlebar", "settings"],
   "permissions": [
     "core:default",
     "shell:allow-open",
@@ -17,6 +17,7 @@
     "core:webview:allow-set-webview-size",
     "updater:default",
     "process:allow-restart",
-    "notification:default"
+    "notification:default",
+    "store:default"
   ]
 }

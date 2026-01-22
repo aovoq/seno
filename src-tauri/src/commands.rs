@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use tauri::Manager;
+use tauri_plugin_store::StoreExt;
 use sysinfo::{Pid, System};
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +13,9 @@ use std::path::Path;
 use libproc::processes;
 
 use crate::{injector, layout, GEMINI_REINJECT_SCRIPT};
+
+const SETTINGS_STORE_PATH: &str = "settings.json";
+const DISPLAY_SETTINGS_KEY: &str = "displaySettings";
 
 const AI_SERVICES: [&str; 3] = ["claude", "chatgpt", "gemini"];
 
@@ -55,6 +59,28 @@ fn ensure_settings_initialized() -> DisplaySettings {
         *settings = get_default_settings();
     }
     settings.clone()
+}
+
+fn load_settings_from_store(app: &tauri::AppHandle) -> DisplaySettings {
+    let store = match app.store(SETTINGS_STORE_PATH) {
+        Ok(s) => s,
+        Err(_) => return get_default_settings(),
+    };
+
+    match store.get(DISPLAY_SETTINGS_KEY) {
+        Some(value) => {
+            serde_json::from_value(value.clone()).unwrap_or_else(|_| get_default_settings())
+        }
+        None => get_default_settings(),
+    }
+}
+
+fn save_settings_to_store(app: &tauri::AppHandle, settings: &DisplaySettings) -> Result<(), String> {
+    let store = app.store(SETTINGS_STORE_PATH).map_err(|e| e.to_string())?;
+    let value = serde_json::to_value(settings).map_err(|e| e.to_string())?;
+    store.set(DISPLAY_SETTINGS_KEY, value);
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 // Store zoom level as percentage (100 = 1.0x, 150 = 1.5x, etc.)
@@ -291,12 +317,25 @@ pub async fn focus_input(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn get_display_settings() -> DisplaySettings {
-    ensure_settings_initialized()
+pub fn get_display_settings(app: tauri::AppHandle) -> DisplaySettings {
+    // Load from persistent store first
+    let stored_settings = load_settings_from_store(&app);
+
+    // Update memory cache
+    {
+        let mut current = DISPLAY_SETTINGS.lock().unwrap();
+        *current = stored_settings.clone();
+    }
+
+    stored_settings
 }
 
 #[tauri::command]
 pub async fn set_display_settings(app: tauri::AppHandle, settings: DisplaySettings) -> Result<(), String> {
+    // Save to persistent store
+    save_settings_to_store(&app, &settings)?;
+
+    // Update memory cache
     {
         let mut current = DISPLAY_SETTINGS.lock().unwrap();
         *current = settings.clone();
