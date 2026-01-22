@@ -6,7 +6,7 @@ use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
     webview::{NewWindowResponse, WebviewBuilder},
     Emitter, LogicalPosition, LogicalSize, Manager, PhysicalSize, Position, Size, WebviewUrl,
-    WindowEvent, TitleBarStyle,
+    WebviewWindowBuilder, WindowEvent, TitleBarStyle,
 };
 use tauri_plugin_opener::OpenerExt;
 use serde::Serialize;
@@ -493,6 +493,8 @@ pub fn run() {
             commands::refresh_gemini_session,
             commands::focus_input,
             commands::get_memory_usage,
+            commands::get_display_settings,
+            commands::set_display_settings,
         ])
         .setup(|app| {
             #[cfg(desktop)]
@@ -506,6 +508,10 @@ pub fn run() {
 
             let app_menu = SubmenuBuilder::new(app, "Seno")
                 .item(&PredefinedMenuItem::about(app, None, None)?)
+                .separator()
+                .item(&MenuItemBuilder::with_id("preferences", "Preferences...")
+                    .accelerator("CmdOrCtrl+,")
+                    .build(app)?)
                 .separator()
                 .item(&PredefinedMenuItem::services(app, None)?)
                 .separator()
@@ -559,7 +565,23 @@ pub fn run() {
                 let app_handle = app_handle.clone();
                 let id = event.id().0.clone();
                 tauri::async_runtime::spawn(async move {
-                    let result = match id.as_str() {
+                    let result: Result<(), String> = match id.as_str() {
+                        "preferences" => {
+                            if let Some(window) = app_handle.get_webview_window("settings") {
+                                let _ = window.set_focus();
+                            } else {
+                                let _ = WebviewWindowBuilder::new(
+                                    &app_handle,
+                                    "settings",
+                                    WebviewUrl::App("settings.html".into()),
+                                )
+                                .title("Preferences")
+                                .inner_size(300.0, 260.0)
+                                .resizable(false)
+                                .build();
+                            }
+                            Ok(())
+                        }
                         "zoom_in" => commands::zoom_in(app_handle).await.map(|_| ()),
                         "zoom_in_alt" => commands::zoom_in(app_handle).await.map(|_| ()),
                         "zoom_out" => commands::zoom_out(app_handle).await.map(|_| ()),

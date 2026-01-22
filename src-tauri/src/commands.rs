@@ -1,6 +1,8 @@
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Mutex;
 use tauri::Manager;
 use sysinfo::{Pid, System};
+use serde::{Deserialize, Serialize};
 
 #[cfg(target_os = "macos")]
 use std::collections::HashSet;
@@ -12,6 +14,48 @@ use libproc::processes;
 use crate::{injector, layout, GEMINI_REINJECT_SCRIPT};
 
 const AI_SERVICES: [&str; 3] = ["claude", "chatgpt", "gemini"];
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TitlebarElement {
+    pub id: String,
+    pub visible: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DisplaySettings {
+    pub elements: Vec<TitlebarElement>,
+}
+
+impl Default for DisplaySettings {
+    fn default() -> Self {
+        Self {
+            elements: vec![
+                TitlebarElement { id: "memory".to_string(), visible: true },
+                TitlebarElement { id: "serviceStatus".to_string(), visible: true },
+                TitlebarElement { id: "geminiReinject".to_string(), visible: true },
+                TitlebarElement { id: "providerToast".to_string(), visible: true },
+            ],
+        }
+    }
+}
+
+static DISPLAY_SETTINGS: Mutex<DisplaySettings> = Mutex::new(DisplaySettings {
+    elements: Vec::new(),
+});
+
+fn get_default_settings() -> DisplaySettings {
+    DisplaySettings::default()
+}
+
+fn ensure_settings_initialized() -> DisplaySettings {
+    let mut settings = DISPLAY_SETTINGS.lock().unwrap();
+    if settings.elements.is_empty() {
+        *settings = get_default_settings();
+    }
+    settings.clone()
+}
 
 // Store zoom level as percentage (100 = 1.0x, 150 = 1.5x, etc.)
 // Default is 100%
@@ -243,6 +287,62 @@ pub async fn focus_input(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(webview) = app.get_webview("main") {
         webview.set_focus().map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_display_settings() -> DisplaySettings {
+    ensure_settings_initialized()
+}
+
+#[tauri::command]
+pub async fn set_display_settings(app: tauri::AppHandle, settings: DisplaySettings) -> Result<(), String> {
+    {
+        let mut current = DISPLAY_SETTINGS.lock().unwrap();
+        *current = settings.clone();
+    }
+
+    // Apply settings to titlebar webview directly
+    if let Some(titlebar) = app.get_webview("titlebar") {
+        let script = format!(
+            r#"
+            (function() {{
+                const settings = {settings_json};
+                const container = document.querySelector(".titlebar-right");
+                if (!container) return;
+
+                const elementMap = {{
+                    "memory": document.getElementById("memory-indicator"),
+                    "serviceStatus": document.getElementById("service-status"),
+                    "geminiReinject": document.getElementById("gemini-reinject"),
+                    "providerToast": document.getElementById("provider-toast"),
+                }};
+
+                // Apply visibility and order
+                settings.elements.forEach((el, index) => {{
+                    const domEl = elementMap[el.id];
+                    if (!domEl) return;
+
+                    domEl.style.order = index;
+                    if (el.id === "serviceStatus") {{
+                        domEl.style.display = el.visible ? "flex" : "none";
+                    }} else if (el.id === "providerToast") {{
+                        if (!el.visible) domEl.style.display = "none";
+                    }} else {{
+                        domEl.style.display = el.visible ? "" : "none";
+                    }}
+                }});
+
+                // Update global flag for toast handling
+                const toastEl = settings.elements.find(e => e.id === "providerToast");
+                window.__seno_toast_enabled = toastEl ? toastEl.visible : true;
+            }})();
+            "#,
+            settings_json = serde_json::to_string(&settings).unwrap_or_default()
+        );
+        titlebar.eval(&script).map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 

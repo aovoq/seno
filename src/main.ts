@@ -10,8 +10,24 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 
 const view = new URLSearchParams(window.location.search).get("view") ?? "input";
+console.log("[main.ts] Loaded. View:", view);
 
 document.body.dataset.view = view;
+
+interface TitlebarElement {
+  id: string;
+  visible: boolean;
+}
+
+interface DisplaySettings {
+  elements: TitlebarElement[];
+}
+
+declare global {
+  interface Window {
+    __seno_toast_enabled?: boolean;
+  }
+}
 
 if (view === "titlebar") {
   const titlebar = document.querySelector(".titlebar") as HTMLElement | null;
@@ -24,6 +40,43 @@ if (view === "titlebar") {
   const toastIndicator = document.getElementById("provider-toast");
   const memoryIndicator = document.getElementById("memory-indicator");
   const reinjectIndicator = document.getElementById("gemini-reinject");
+  const serviceStatus = document.getElementById("service-status");
+
+  const elementMap: Record<string, HTMLElement | null> = {
+    memory: memoryIndicator,
+    serviceStatus: serviceStatus,
+    geminiReinject: reinjectIndicator,
+    providerToast: toastIndicator,
+  };
+
+  function applyDisplaySettings(settings: DisplaySettings): void {
+    settings.elements.forEach((el, index) => {
+      const domEl = elementMap[el.id];
+      if (!domEl) return;
+
+      domEl.style.order = String(index);
+      if (el.id === "serviceStatus") {
+        domEl.style.display = el.visible ? "flex" : "none";
+      } else if (el.id === "providerToast") {
+        if (!el.visible) domEl.style.display = "none";
+      } else {
+        domEl.style.display = el.visible ? "" : "none";
+      }
+    });
+
+    const toastEl = settings.elements.find((e) => e.id === "providerToast");
+    window.__seno_toast_enabled = toastEl ? toastEl.visible : true;
+  }
+
+  // Load initial settings from Rust
+  invoke<DisplaySettings>("get_display_settings")
+    .then((settings) => {
+      console.log("[titlebar] Loaded settings from Rust:", settings);
+      applyDisplaySettings(settings);
+    })
+    .catch((e) => {
+      console.warn("[titlebar] Failed to load settings:", e);
+    });
 
   const statusItems = {
     claude: document.querySelector('[data-provider="claude"]') as HTMLElement | null,
@@ -207,7 +260,7 @@ if (view === "titlebar") {
   let toastTimer: number | null = null;
 
   function handleProviderToast(event: { payload: { provider: string; message: string } }): void {
-    if (!toastIndicator) return;
+    if (!toastIndicator || window.__seno_toast_enabled === false) return;
     const provider = event.payload.provider.toUpperCase();
     toastIndicator.textContent = `${provider}: ${event.payload.message}`;
     toastIndicator.style.display = "flex";
