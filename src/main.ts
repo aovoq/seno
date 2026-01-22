@@ -5,6 +5,7 @@ import {
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
+import { platform } from "@tauri-apps/plugin-os";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 
@@ -65,9 +66,21 @@ if (view === "titlebar") {
       }
       if (!hasPermission) return;
 
+      // Get platform-specific notification sound
+      const currentPlatform = platform();
+      let sound: string | undefined;
+
+      if (currentPlatform === "macos") {
+        sound = "Ping";  // macOS system sound
+      } else if (currentPlatform === "linux") {
+        sound = "message-new-instant";  // XDG theme sound
+      }
+      // Windows: undefined (uses OS default notification sound)
+
       sendNotification({
         title: "Seno",
         body: "All AI responses completed",
+        sound,
       });
     } catch (e) {
       console.warn("Notification failed:", e);
