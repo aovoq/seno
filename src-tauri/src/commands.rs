@@ -1,5 +1,13 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use tauri::Manager;
+use sysinfo::{Pid, System};
+
+#[cfg(target_os = "macos")]
+use std::collections::HashSet;
+#[cfg(target_os = "macos")]
+use std::path::Path;
+#[cfg(target_os = "macos")]
+use libproc::processes;
 
 use crate::{injector, layout, GEMINI_REINJECT_SCRIPT};
 
@@ -238,3 +246,112 @@ pub async fn focus_input(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn get_memory_usage() -> Result<f64, String> {
+    let pid = Pid::from_u32(std::process::id());
+    let mut system = System::new_all();
+    system.refresh_processes();
+
+    let process = system
+        .process(pid)
+        .ok_or_else(|| "Process not found".to_string())?;
+
+    let mut total_memory = process.memory();
+
+    #[cfg(target_os = "macos")]
+    {
+        let user_id = process.user_id().cloned();
+        let related_pids = macos_related_pids(&system, pid, process.start_time(), user_id);
+        total_memory += sum_memory_for_pids(&system, related_pids);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let descendant_pids = system
+            .processes()
+            .values()
+            .filter(|proc| is_descendant(proc, pid, system.processes()))
+            .map(|proc| proc.pid());
+        total_memory += sum_memory_for_pids(&system, descendant_pids);
+    }
+
+    let memory_mb = total_memory as f64 / (1024.0 * 1024.0);
+    Ok(memory_mb)
+}
+
+#[cfg(target_os = "macos")]
+fn macos_webkit_data_store_path() -> Option<std::path::PathBuf> {
+    let home = std::env::var("HOME").ok()?;
+    let bundle_id = "com.seno.viewer";
+    let path = Path::new(&home).join("Library").join("WebKit").join(bundle_id);
+    path.exists().then_some(path)
+}
+
+#[cfg(target_os = "macos")]
+fn macos_related_pids(
+    system: &System,
+    root_pid: Pid,
+    start_time: u64,
+    user_id: Option<sysinfo::Uid>,
+) -> HashSet<Pid> {
+    let mut related_pids = HashSet::new();
+
+    for proc in system.processes().values() {
+        if is_descendant(proc, root_pid, system.processes()) {
+            related_pids.insert(proc.pid());
+        }
+        if proc.name().starts_with("seno ") {
+            related_pids.insert(proc.pid());
+        }
+    }
+
+    if let Some(data_store_path) = macos_webkit_data_store_path() {
+        if let Ok(pids) = processes::pids_by_path(&data_store_path, false, false) {
+            for web_pid in pids {
+                related_pids.insert(Pid::from_u32(web_pid));
+            }
+        }
+    }
+
+    for proc in system.processes().values() {
+        if proc.name() != "com.apple.WebKit.WebContent" {
+            continue;
+        }
+        if proc.start_time() < start_time {
+            continue;
+        }
+        if let Some(user_id) = user_id.as_ref() {
+            if proc.user_id() != Some(user_id) {
+                continue;
+            }
+        }
+        related_pids.insert(proc.pid());
+    }
+
+    related_pids
+}
+
+fn sum_memory_for_pids(
+    system: &System,
+    pids: impl IntoIterator<Item = Pid>,
+) -> u64 {
+    pids
+        .into_iter()
+        .filter_map(|pid| system.process(pid).map(|proc| proc.memory()))
+        .sum()
+}
+
+fn is_descendant(
+    process: &sysinfo::Process,
+    root_pid: Pid,
+    processes: &std::collections::HashMap<Pid, sysinfo::Process>,
+) -> bool {
+    let mut current = process.parent();
+    while let Some(pid) = current {
+        if pid == root_pid {
+            return true;
+        }
+        current = processes.get(&pid).and_then(|proc| proc.parent());
+    }
+    false
+}

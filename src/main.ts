@@ -21,6 +21,7 @@ if (view === "titlebar") {
   const updateProgress = document.getElementById("update-progress");
   const progressBar = document.getElementById("progress-bar");
   const toastIndicator = document.getElementById("provider-toast");
+  const memoryIndicator = document.getElementById("memory-indicator");
 
   const statusItems = {
     claude: document.querySelector('[data-provider="claude"]') as HTMLElement | null,
@@ -133,6 +134,27 @@ if (view === "titlebar") {
   }
 
   setTimeout(checkForUpdates, 3000);
+
+  function formatMemory(mb: number): string {
+    if (mb >= 1024) {
+      return `${(mb / 1024).toFixed(1)} GB`;
+    }
+    return `${Math.round(mb)} MB`;
+  }
+
+  async function refreshMemoryUsage(): Promise<void> {
+    try {
+      const memoryMb = await invoke<number>("get_memory_usage");
+      if (memoryIndicator) {
+        memoryIndicator.textContent = `Memory: ${formatMemory(memoryMb)}`;
+      }
+    } catch (e) {
+      console.warn("Failed to get memory usage:", e);
+    }
+  }
+
+  refreshMemoryUsage();
+  setInterval(refreshMemoryUsage, 5000);
 
   // Refresh Gemini session every 90 seconds to maintain WebView detection bypass
   setInterval(() => {

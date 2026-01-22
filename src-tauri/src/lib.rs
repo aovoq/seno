@@ -491,6 +491,7 @@ pub fn run() {
             commands::clear_cache_all,
             commands::refresh_gemini_session,
             commands::focus_input,
+            commands::get_memory_usage,
         ])
         .setup(|app| {
             #[cfg(desktop)]
